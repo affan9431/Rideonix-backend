@@ -1,0 +1,363 @@
+const dotenv = require("dotenv");
+dotenv.config();
+
+const express = require("express");
+const cors = require("cors");
+const mongoose = require("mongoose");
+const haversine = require("haversine-distance");
+const rateLimit = require("express-rate-limit");
+const helmet = require("helmet");
+const mongoSanitize = require("express-mongo-sanitize");
+const xss = require("xss-clean");
+
+const app = express();
+
+const authRoute = require("./routes/authRoute");
+const riderRoute = require("./routes/riderRoute");
+const driverRoute = require("./routes/driverRoute");
+const directionsRoute = require("./routes/directionsRoute");
+const rideHistoryRoute = require("./routes/rideHistoryRoute");
+const contactRoute = require("./routes/contactRoute");
+const reviewRoute = require("./routes/reviewRoute");
+
+const http = require("http");
+const server = http.createServer(app);
+const { Server } = require("socket.io");
+const rideHistory = require("./model/rideHistoryModel");
+const Driver = require("./model/driverModel");
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PATCH"],
+    credentials: true,
+  },
+});
+
+app.use(express.json());
+
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true,
+  })
+);
+
+mongoose
+  .connect(
+    "mongodb+srv://affansayeed234:Kg7SXm4OvuvKZETa@cluster0.rfaqlhz.mongodb.net/Uber",
+    {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    }
+  )
+  .then(() => console.log("Connected to MongoDB"))
+  .catch((err) => console.log(`Error connecting to MongoDB: ${err}`));
+
+const limiter = rateLimit({
+  max: 100,
+  windowMs: 60 * 60 * 1000,
+  message: "Too many requests from this IP, please try again in an hour!",
+});
+
+app.use("/api", limiter);
+app.use(xss());
+app.use(helmet());
+app.use(mongoSanitize());
+
+app.get("/", (req, res) => {
+  res.send({ message: "Welcome to the Uber Clone" });
+  console.log("Hello World");
+});
+
+app.get("/get-city", async (req, res) => {
+  const { lat, lon } = req.query;
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
+  );
+  const data = await response.json();
+  res.json(data);
+});
+
+app.use("/api/auth", authRoute);
+app.use("/api/rider", riderRoute);
+app.use("/api/driver", driverRoute);
+app.use("/api", directionsRoute);
+app.use("/api/rideHistory", rideHistoryRoute);
+app.use("/api/contact", contactRoute);
+app.use("/api/review", reviewRoute);
+
+const driverList = new Map(); // change to map from array
+const nearestDriverList = new Map();
+const rideLocks = new Map(); // 🔐 This goes outside the socket.on()
+const riderSocketMap = new Map();
+const driverSocketMap = new Map();
+
+io.on("connection", (socket) => {
+  console.log("🧩 New socket connected:", socket.id);
+
+  socket.on("register_rider", (data) => {
+    riderSocketMap.set(data.riderId, socket.id);
+  });
+
+  socket.on("register_driver", (data) => {
+    driverSocketMap.set(data.driverId, socket.id);
+  });
+
+  socket.on("driverOnline", (data) => {
+    const { driverInfo, location } = data;
+
+    if (!driverInfo || !driverInfo.driverId) {
+      console.warn("❌ Invalid driver data received:", data);
+      return;
+    }
+    const alreadyExists = Array.from(driverList.values()).some(
+      (entry) => entry.driverInfo.driverId === data.driverInfo.driverId
+    );
+
+    if (!alreadyExists) {
+      driverList.set(socket.id, {
+        driverInfo: driverInfo,
+        location: location,
+      });
+      console.log("✅ Driver added:", data.driverInfo.username);
+    } else {
+      console.log("⚠️ Driver already exists:", data.driverInfo.username);
+    }
+  });
+
+  socket.on("driverOffline", (data) => {
+    for (const [socketId, driver] of driverList.entries()) {
+      if (driver.driverInfo.driverId === data.driverInfo.driverId) {
+        driverList.delete(socketId);
+        console.log("✅ Driver removed:", driver.driverInfo.username);
+        break;
+      }
+    }
+  });
+
+  socket.on("driverLocationUpdate", (data) => {
+    const { driverId, location } = data;
+
+    if (!driverId || !location) {
+      console.warn("❌ Invalid driver data received");
+      return;
+    }
+
+    for (const [socketId, driver] of driverList.entries()) {
+      if (driverId === driver.driverInfo.driverId) {
+        driverList.set(socketId, {
+          ...driver,
+          location: location,
+        });
+
+        const riderSocket =
+          rideLocks.size > 0 && rideLocks.get(driverId)?.riderSocket;
+        if (riderSocket) {
+          io.to(riderSocket).emit("driver_location_update", {
+            driverId,
+            location,
+          });
+        }
+        break;
+      }
+    }
+  });
+
+  socket.on("ride_request", (data) => {
+    const nearbyKm = Number(process.env.MAX_NEARBY_KM) || 8;
+    const maxDistance = nearbyKm * 1000;
+    const pickUpLocation = data.pickUpLocation;
+
+    nearestDriverList.clear();
+
+    for (const [socketId, driver] of driverList.entries()) {
+      const locationDiffrence = haversine(pickUpLocation, driver.location);
+      if (locationDiffrence <= maxDistance) {
+        nearestDriverList.set(socketId, driver);
+      }
+    }
+
+    console.log("🚖 Nearest drivers found:", nearestDriverList.size);
+
+    for (const [socketId, driver] of nearestDriverList.entries()) {
+      io.to(socketId).emit("ride_request_to_driver", {
+        ...data,
+        requestedAt: new Date().toISOString(),
+      });
+    }
+
+    console.log("send");
+  });
+
+  socket.on("ride_accepted", (data) => {
+    console.log("<---------------From Accept Ride--------------->");
+    console.log(data);
+    const riderId = data.rideData.riderId;
+    const driverId = data.driverData.driverId;
+
+    if (rideLocks.has(data.rideData.riderId)) {
+      console.log("Print from here");
+      socket.emit("ride_already_taken");
+      return;
+    }
+
+    const riderSocket = riderSocketMap.get(riderId);
+    const driverSocket = driverSocketMap.get(driverId);
+    const otp = Math.floor(Math.random() * 9000 + 1000);
+
+    rideLocks.set(data.rideData.riderId, {
+      driverData: data.driverData,
+      riderSocket: riderSocket,
+      OTP: otp,
+    });
+
+    let driverLocation = null;
+
+    for (const [socketId, driver] of driverList.entries()) {
+      if (driver.driverId === driverId) {
+        driverLocation = driver.location || { lat: 0, lon: 0 };
+      }
+    }
+
+    io.to(riderSocket).emit("ride_confirmed", {
+      driverData: data.driverData,
+      location: driverLocation,
+      otp: rideLocks.get(data.rideData.riderId).OTP,
+    });
+
+    io.to(driverSocket).emit("ride_assigned", {
+      rideData: data.rideData,
+    });
+
+    nearestDriverList.clear();
+  });
+
+  socket.on("ride_rejected", (data) => {
+    const driverSocket = driverSocketMap.get(data.driverId);
+    nearestDriverList.delete(driverSocket);
+
+    console.log("🚖Current Nearest drivers found:", nearestDriverList.size);
+    if (nearestDriverList.size === 0) {
+      const riderSocket = riderSocketMap.get(data.riderId);
+      io.to(riderSocket).emit("no_driver_found");
+    }
+  });
+
+  socket.on("ride_canceled_by_rider", (data) => {
+    console.log(
+      "<-------------------FROM RIDE CANCEL BY RIDER--------------------->"
+    );
+    console.log("Cancel data:", data);
+    const driverSocket = driverSocketMap.get(data.driverId);
+
+    rideLocks.delete(data.riderId);
+    nearestDriverList.delete(data.rideId);
+
+    if (!driverSocket) {
+      console.warn("Driver socket not found. Driver might be offline.");
+      return;
+    }
+
+    io.to(driverSocket).emit("ride_cancel_to_driver", {
+      reason: data.reason || "Rider canceled the ride",
+      cancelTime: data.timestamp || Date.now(),
+      currentTime: Date.now(),
+    });
+  });
+
+  socket.on("ride_canceled_by_driver", (data) => {
+    console.log(
+      "<-------------------FROM RIDE CANCEL BY DRIVER--------------------->"
+    );
+    console.log("Cancel data:", data);
+    const riderSocket = riderSocketMap.get(data.riderId);
+
+    rideLocks.delete(data.riderId);
+    nearestDriverList.delete(data.rideId);
+
+    if (!riderSocket) {
+      console.warn("Rider socket not found. Rider might be offline.");
+      return;
+    }
+
+    io.to(riderSocket).emit("ride_cancel_to_rider", {
+      reason: data.reason || "Driver canceled the ride",
+      cancelTime: data.timestamp || Date.now(),
+      currentTime: Date.now(),
+    });
+  });
+
+  socket.on("ride_started_by_driver", (data) => {
+    console.log(
+      "<--------------------FROM RIDE START BY DRIVER--------------------->"
+    );
+
+    const riderId = data.riderId;
+
+    const OTP = rideLocks.get(riderId).OTP;
+    const otp = Number(data.otp);
+
+    const driverSocket = driverSocketMap.get(data.driverId);
+    const riderSocket = riderSocketMap.get(riderId);
+
+    if (!driverSocket || !riderSocket) {
+      console.log("Driver or rider socket not found");
+      return;
+    }
+
+    if (OTP !== otp) {
+      console.log("OTP is incorrect");
+      io.to(driverSocket).emit("otp_incorrect");
+      return;
+    }
+
+    console.log("OTP matched ✅ Ride starting...");
+    io.to(riderSocket).emit("ride_start");
+  });
+
+  socket.on("ride_finished", async (data) => {
+    try {
+      const driverData = await Driver.findById(data.driverId);
+      await rideHistory.create({
+        driver: {
+          driverId: driverData._id,
+          driverName: driverData.username,
+          profilePicture: driverData.profilePicture,
+          vehicleType: driverData.selectedVehicle,
+          cityName: driverData.cityName,
+        },
+        rider: {
+          riderId: data.riderId,
+          riderName: data.riderName,
+          pickUpLocationName: data.pickUpLocationName,
+          dropLocationName: data.dropLocationName,
+        },
+        price: data.price,
+      });
+
+      const riderSocket = riderSocketMap.get(data.riderId);
+      rideLocks.delete(data.riderId);
+      nearestDriverList.clear();
+      io.to(riderSocket).emit("ride_finished_on_rider");
+      console.log("Done");
+    } catch (error) {
+      console.log(error);
+    }
+  });
+
+  socket.on("payment_done", (data) => {
+    const riderId = data.riderId;
+    const riderSocket = riderSocketMap.get(riderId);
+
+    io.to(riderSocket).emit("payment_success");
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`${socket.id} disconnected`);
+  });
+});
+
+server.listen(3000, () => {
+  console.log("listening on *:3000");
+});
