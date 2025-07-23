@@ -11,7 +11,6 @@ exports.registerDriver = async (req, res) => {
         message: "Please provide all the required fields",
       });
     }
-    console.log(driverData);
     const driver = await Driver.create(driverData);
 
     const token = jwt.sign(

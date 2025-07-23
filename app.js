@@ -75,7 +75,6 @@ app.use((req, res, next) => {
 
 app.get("/", (req, res) => {
   res.send({ message: "Welcome to the Uber Clone" });
-  console.log("Hello World");
 });
 
 app.get("/get-city", async (req, res) => {
@@ -196,18 +195,14 @@ io.on("connection", (socket) => {
         requestedAt: new Date().toISOString(),
       });
     }
-
-    console.log("send");
   });
 
   socket.on("ride_accepted", (data) => {
     console.log("<---------------From Accept Ride--------------->");
-    console.log(data);
     const riderId = data.rideData.riderId;
     const driverId = data.driverData.driverId;
 
     if (rideLocks.has(data.rideData.riderId)) {
-      console.log("Print from here");
       socket.emit("ride_already_taken");
       return;
     }
@@ -258,7 +253,6 @@ io.on("connection", (socket) => {
     console.log(
       "<-------------------FROM RIDE CANCEL BY RIDER--------------------->"
     );
-    console.log("Cancel data:", data);
     const driverSocket = driverSocketMap.get(data.driverId);
 
     rideLocks.delete(data.riderId);
@@ -280,7 +274,6 @@ io.on("connection", (socket) => {
     console.log(
       "<-------------------FROM RIDE CANCEL BY DRIVER--------------------->"
     );
-    console.log("Cancel data:", data);
     const riderSocket = riderSocketMap.get(data.riderId);
 
     rideLocks.delete(data.riderId);
@@ -350,7 +343,6 @@ io.on("connection", (socket) => {
       rideLocks.delete(data.riderId);
       nearestDriverList.clear();
       io.to(riderSocket).emit("ride_finished_on_rider");
-      console.log("Done");
     } catch (error) {
       console.log(error);
     }

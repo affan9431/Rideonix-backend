@@ -4,8 +4,6 @@ const Rider = require("../model/riderModel");
 
 const otpStore = {}; // { phoneNumber: { otp: "1234", expires: 1234567890 } }
 
-console.log(otpStore);
-
 exports.sendOtp = async (req, res) => {
   try {
     const { identifier: phoneNumber } = req.body;
