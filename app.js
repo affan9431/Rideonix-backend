@@ -61,9 +61,17 @@ const limiter = rateLimit({
 });
 
 app.use("/api", limiter);
-app.use(xss());
-app.use(helmet());
-app.use(mongoSanitize());
+
+app.use((req, res, next) => {
+  if (req.query && typeof req.query === "object") {
+    req.query = { ...req.query }; // now it's mutable again
+  }
+  next();
+});
+
+// app.use(xss());
+// app.use(helmet());
+// app.use(mongoSanitize());
 
 app.get("/", (req, res) => {
   res.send({ message: "Welcome to the Uber Clone" });
@@ -168,12 +176,14 @@ io.on("connection", (socket) => {
     const nearbyKm = Number(process.env.MAX_NEARBY_KM) || 8;
     const maxDistance = nearbyKm * 1000;
     const pickUpLocation = data.pickUpLocation;
-
-    nearestDriverList.clear();
+    const vehicleType = data.vehicleType;
 
     for (const [socketId, driver] of driverList.entries()) {
       const locationDiffrence = haversine(pickUpLocation, driver.location);
-      if (locationDiffrence <= maxDistance) {
+      if (
+        driver.selectedVehicle.toLowerCase() === vehicleType.toLowerCase() &&
+        locationDiffrence <= maxDistance
+      ) {
         nearestDriverList.set(socketId, driver);
       }
     }
@@ -355,6 +365,8 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log(`${socket.id} disconnected`);
+    driverList.delete(socket.id);
+    console.log("Disconnected driver list:", driverList);
   });
 });
 
