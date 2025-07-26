@@ -6,20 +6,43 @@ exports.createReview = async (req, res) => {
   try {
     const { rideId, rider, review, rating } = req.body;
 
-    if (!rider || !rating) {
-      return res.status(400).json({ message: "Ride and rating are required." });
+    if (!rideId || !rider || typeof rating !== "number") {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: rideId, rider, or rating.",
+      });
     }
 
+    // Create the review
     const newReview = await Review.create({ rideId, rider, review, rating });
 
-    await rideHistory.findByIdAndUpdate(rideId, {
-      review: newReview._id,
-    });
+    // Update RideHistory with the review reference
+    const updatedRide = await rideHistory.findByIdAndUpdate(
+      rideId,
+      { review: newReview._id },
+      { new: true }
+    );
 
-    res.status(201).json({ success: true, data: newReview });
+    if (!updatedRide) {
+      return res.status(404).json({
+        success: false,
+        message: "Ride history not found. Review saved but ride not updated.",
+        data: newReview,
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Review created and ride history updated successfully.",
+      data: newReview,
+    });
+    
   } catch (err) {
-    console.error("Error creating review:", err);
-    res.status(500).json({ message: "Server Error" });
+    console.error("🔥 Error creating review:", err.message);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while creating review.",
+    });
   }
 };
 
