@@ -82,6 +82,13 @@ app.use("/api/rideHistory", rideHistoryRoute);
 app.use("/api/contact", contactRoute);
 app.use("/api/review", reviewRoute);
 
+app.all("*", (req, res, next) => {
+  res.status(404).json({
+    status: "fail",
+    message: `Can't find ${req.originalUrl} on ther server`,
+  });
+});
+
 const driverList = new Map(); // change to map from array
 const nearestDriverList = new Map();
 const rideLocks = new Map(); // 🔐 This goes outside the socket.on()
