@@ -347,6 +347,8 @@ io.on("connection", (socket) => {
     const riderId = data.riderId;
     const riderSocket = riderSocketMap.get(riderId);
     console.log(
+      "Data:",
+      data,
       "Emitting payment_success to rider:",
       riderId,
       "Socket:",
