@@ -1,15 +1,21 @@
 const Review = require("../model/reviewModel");
+const rideHistory = require("../model/rideHistoryModel");
 
 // Create a new review
 exports.createReview = async (req, res) => {
   try {
-    const { ride, review, rating } = req.body;
+    const { rideId, rider, review, rating } = req.body;
 
-    if (!ride || !rating) {
+    if (!rider || !rating) {
       return res.status(400).json({ message: "Ride and rating are required." });
     }
 
-    const newReview = await Review.create({ ride, review, rating });
+    const newReview = await Review.create({ rideId, rider, review, rating });
+
+    await rideHistory.findByIdAndUpdate(rideId, {
+      review: newReview._id,
+    });
+
     res.status(201).json({ success: true, data: newReview });
   } catch (err) {
     console.error("Error creating review:", err);

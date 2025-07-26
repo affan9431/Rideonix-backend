@@ -317,7 +317,7 @@ io.on("connection", (socket) => {
   socket.on("ride_finished", async (data) => {
     try {
       const driverData = await Driver.findById(data.driverId);
-      await rideHistory.create({
+      const newHistory = await rideHistory.create({
         driver: {
           driverId: driverData._id,
           driverName: driverData.username,
@@ -337,7 +337,9 @@ io.on("connection", (socket) => {
       const riderSocket = riderSocketMap.get(data.riderId);
       rideLocks.delete(data.riderId);
       nearestDriverList.clear();
-      io.to(riderSocket).emit("ride_finished_on_rider");
+      io.to(riderSocket).emit("ride_finished_on_rider", {
+        rideId: newHistory._id,
+      });
     } catch (error) {
       console.log(error);
     }
