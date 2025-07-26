@@ -350,13 +350,6 @@ io.on("connection", (socket) => {
   });
 });
 
-app.all("*", (req, res, next) => {
-  res.status(404).json({
-    status: "fail",
-    message: `Can't find ${req.originalUrl} on ther server`,
-  });
-});
-
 server.listen(3000, () => {
   console.log("listening on *:3000");
 });
