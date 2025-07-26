@@ -169,7 +169,7 @@ io.on("connection", (socket) => {
       console.log("Driver:", driver);
       const locationDiffrence = haversine(pickUpLocation, driver.location);
       if (
-        driver.selectedVehicle.toLowerCase() === vehicleType.toLowerCase() &&
+        driver.driverInfo.selectedVehicle.toLowerCase() === vehicleType.toLowerCase() &&
         locationDiffrence <= maxDistance
       ) {
         nearestDriverList.set(socketId, driver);
