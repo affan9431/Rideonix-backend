@@ -167,13 +167,17 @@ io.on("connection", (socket) => {
 
     for (const [socketId, driver] of driverList.entries()) {
       console.log("Driver:", driver);
-      console.log("selectedVehicle:", driver.driverInfo.selectedVehicle);
+      const rawVehicle = driver.driverInfo.selectedVehicle; // "🚘 RideonixGo"
+
+      const cleanedVehicle = rawVehicle
+        .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
+        .trim();
+
+      console.log("Cleaned vehicle:", cleanedVehicle); // "RideonixGo"
+      console.log("selectedVehicle:", rawVehicle);
       console.log("vehicleType:", vehicleType);
       const locationDiffrence = haversine(pickUpLocation, driver.location);
-      if (
-        driver.driverInfo.selectedVehicle === vehicleType &&
-        locationDiffrence <= maxDistance
-      ) {
+      if (cleanedVehicle === vehicleType && locationDiffrence <= maxDistance) {
         nearestDriverList.set(socketId, driver);
       }
     }
