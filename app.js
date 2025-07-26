@@ -166,6 +166,7 @@ io.on("connection", (socket) => {
     const vehicleType = data.vehicleType;
 
     for (const [socketId, driver] of driverList.entries()) {
+      console.log("Driver:", driver);
       const locationDiffrence = haversine(pickUpLocation, driver.location);
       if (
         driver.selectedVehicle.toLowerCase() === vehicleType.toLowerCase() &&
