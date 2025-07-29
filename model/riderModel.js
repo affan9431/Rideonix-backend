@@ -5,7 +5,7 @@ const riderSchema = new mongoose.Schema({
   email: { type: String, required: true },
   phoneNumber: { type: String, required: true },
   profilePicture: { type: String, default: null },
-  authType: { type: String, required: true, enum: ["email", "credentials"] },
+  authType: { type: String, required: true, enum: ["google", "credentials"] },
   createdAt: { type: Date, default: Date.now },
 });
 
