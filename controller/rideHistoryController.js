@@ -2,7 +2,8 @@ const rideHistory = require("../model/rideHistoryModel");
 
 exports.getRideHistory = async (req, res) => {
   try {
-    const { id, role } = req.params;
+    const { id } = req.params;
+    const { role } = req.query;
 
     if (!id || !role) {
       return res.status(400).json({
