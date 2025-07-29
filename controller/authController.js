@@ -140,6 +140,8 @@ exports.googleVerifyOtp = async (req, res) => {
 
     // TODO: Update code for driver flow as well
 
+    console.log("driverState:", driverState);
+
     if (driverState === true) {
       return res.status(200).json({
         success: "success",
