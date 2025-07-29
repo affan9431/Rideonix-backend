@@ -94,6 +94,7 @@ exports.googleVerifyOtp = async (req, res) => {
       username,
       email,
       profilePicture,
+      driverState,
     } = req.body;
 
     if (!otpCode) {
@@ -137,6 +138,15 @@ exports.googleVerifyOtp = async (req, res) => {
       });
     }
 
+    // TODO: Update code for driver flow as well
+
+    if (driverState === true) {
+      return res.status(200).json({
+        success: "success",
+        message: `OTP is verified successfully`,
+      });
+    }
+
     const newUser = await Rider.create({
       username,
       email,
@@ -162,7 +172,6 @@ exports.googleVerifyOtp = async (req, res) => {
     res.status(200).json({
       success: "success",
       message: `OTP is verified successfully`,
-      alreadyRegistered: true,
       token,
     });
   } catch (error) {
