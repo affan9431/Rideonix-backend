@@ -1,6 +1,7 @@
 const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const Rider = require("../model/riderModel");
+const Driver = require("../model/driverModel");
 
 const otpStore = {}; // { phoneNumber: { otp: "1234", expires: 1234567890 } }
 
@@ -111,11 +112,19 @@ exports.googleVerifyOtp = async (req, res) => {
 
     delete otpStore[phoneNumber];
 
-    const existingUserWithPhone = await Rider.findOne({ phoneNumber });
-    const existingUserWithEmail = await Rider.findOne({ email });
+    const existingUserWithPhoneOnRider = await Rider.findOne({ phoneNumber });
+    const existingUserWithEmailOnRider = await Rider.findOne({ email });
 
-    if (existingUserWithPhone) {
-      if (!existingUserWithEmail || existingUserWithEmail.email !== email) {
+    const existingUserWithPhoneOnDriver = await Driver.findOne({ phoneNumber });
+    const existingUserWithEmailOnDriver = await Driver.findOne({ email });
+
+    if (existingUserWithPhoneOnRider || existingUserWithPhoneOnDriver) {
+      if (
+        !existingUserWithEmailOnRider ||
+        existingUserWithEmailOnRider.email !== email ||
+        !existingUserWithEmailOnDriver ||
+        existingUserWithEmailOnDriver.email !== email
+      ) {
         return res.status(400).json({
           success: false,
           message: "Phone number already in use",
@@ -130,17 +139,13 @@ exports.googleVerifyOtp = async (req, res) => {
       }
     }
 
-    if (existingUserWithEmail) {
+    if (existingUserWithEmailOnRider || existingUserWithEmailOnDriver) {
       return res.status(400).json({
         success: false,
         message: "Email already in use",
         reason: "email_conflict",
       });
     }
-
-    // TODO: Update code for driver flow as well
-
-    console.log("driverState:", driverState);
 
     if (driverState === true) {
       return res.status(200).json({
