@@ -55,12 +55,6 @@ passport.use(
       callbackURL: "https://rideonix-backend.onrender.com/auth/google/callback",
     },
     (accessToken, refreshToken, profile, done) => {
-      // send data to db here
-      console.log("Profile:", profile);
-      console.log("Name:", profile.displayName);
-      console.log("Email:", profile.emails[0].value);
-      console.log("Photo:", profile.photos[0].value);
-
       const userData = {
         username: profile.displayName,
         email: profile.emails[0].value,
@@ -145,8 +139,6 @@ app.get("/get-city", async (req, res) => {
   try {
     const { lat, lon } = req.query;
 
-    console.log("lat", lat);
-    console.log("lon", lon);
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
       {
@@ -155,10 +147,7 @@ app.get("/get-city", async (req, res) => {
         },
       }
     );
-
-    console.log("Response:", response);
     const data = await response.json();
-    console.log("City data from backend:", data);
     res.json(data);
   } catch (error) {
     res.json(error);
@@ -257,16 +246,12 @@ io.on("connection", (socket) => {
     const vehicleType = data.vehicleType;
 
     for (const [socketId, driver] of driverList.entries()) {
-      console.log("Driver:", driver);
       const rawVehicle = driver.driverInfo.selectedVehicle; // "🚘 RideonixGo"
 
       const cleanedVehicle = rawVehicle
         .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
         .trim();
 
-      console.log("Cleaned vehicle:", cleanedVehicle); // "RideonixGo"
-      console.log("selectedVehicle:", rawVehicle);
-      console.log("vehicleType:", vehicleType);
       const locationDiffrence = haversine(pickUpLocation, driver.location);
       if (cleanedVehicle === vehicleType && locationDiffrence <= maxDistance) {
         nearestDriverList.set(socketId, driver);
@@ -439,14 +424,6 @@ io.on("connection", (socket) => {
   socket.on("payment_done", (data) => {
     const riderId = data.riderId;
     const riderSocket = riderSocketMap.get(riderId);
-    console.log(
-      "Data:",
-      data,
-      "Emitting payment_success to rider:",
-      riderId,
-      "Socket:",
-      riderSocket
-    );
 
     io.to(riderSocket).emit("payment_success");
   });
